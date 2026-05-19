@@ -1,0 +1,45 @@
+# Environment
+.env
+.venv/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Runtime result outputs
+data/results/*.json
+data/results/*.csv
+!data/results/.gitkeep
+
+# Runtime/generated vector stores
+data/vectorstores/*
+!data/vectorstores/.gitkeep
+
+# Legacy/generated FAISS store
+faiss_store/
+
+# Logs
+*.log
+logs/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Secrets and local overrides
+*.env
+.env.*
+!.env.example

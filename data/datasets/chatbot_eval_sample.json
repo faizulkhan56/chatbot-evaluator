@@ -1,0 +1,29 @@
+{
+  "name": "chatbot_eval_sample",
+  "examples": [
+    {
+      "inputs": {
+        "question": "What is LangChain?"
+      },
+      "outputs": {
+        "answer": "A framework for building LLM applications"
+      }
+    },
+    {
+      "inputs": {
+        "question": "What is LangSmith?"
+      },
+      "outputs": {
+        "answer": "A platform for observing and evaluating LLM applications"
+      }
+    },
+    {
+      "inputs": {
+        "question": "What is OpenAI?"
+      },
+      "outputs": {
+        "answer": "A company that creates Large Language Models"
+      }
+    }
+  ]
+}

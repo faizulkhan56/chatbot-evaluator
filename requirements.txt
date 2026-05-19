@@ -1,13 +1,37 @@
-langchain
-langchain-core
-langchain-community
+# FastAPI
+fastapi
+uvicorn
+pydantic
+pytest
+httpx
+
+# Environment
+python-dotenv
+
+# OpenAI
+openai
+
+# LangChain ecosystem
+langchain==0.3.25
+langchain-core==0.3.65
+langchain-community==0.3.24
+langchain-openai==0.3.18
+langchain-text-splitters==0.3.8
+langgraph==0.2.69
+langsmith>=0.3.45,<0.4
+
+# RAG / embeddings / vector stores
+tiktoken
 pypdf
 pymupdf
 sentence-transformers
 faiss-cpu
 chromadb
-langchain-groq
-python-dotenv
 typesense
-langchain_openai
-langgraph
+
+# Data / output
+pandas
+beautifulsoup4
+
+# Optional OpenAI Agents SDK
+openai-agents

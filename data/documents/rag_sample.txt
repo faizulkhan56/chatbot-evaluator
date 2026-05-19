@@ -1,0 +1,5 @@
+ReAct agents combine reasoning and acting. A ReAct agent thinks through a task, chooses an action such as calling a tool, observes the result, and then updates its reasoning. This observation step gives the agent a simple form of self-reflection because it can compare the tool result with its current plan before deciding the next action.
+
+Few-shot prompting can introduce several biases. Common examples include majority label bias, where the model overuses the most frequent label in examples; recency bias, where the model gives too much weight to the most recent example; and common token bias, where the model prefers labels made from more common tokens.
+
+Adversarial attacks against language models can take several forms. Five examples are token manipulation, gradient-based attacks, jailbreak prompting, human red-teaming, and model red-teaming. These attacks try to make a model produce unsafe, incorrect, or policy-violating behavior.

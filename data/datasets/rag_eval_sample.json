@@ -1,0 +1,29 @@
+{
+  "name": "rag_eval_sample",
+  "examples": [
+    {
+      "inputs": {
+        "question": "How does the ReAct agent use self-reflection?"
+      },
+      "outputs": {
+        "answer": "ReAct integrates reasoning and acting, performing actions such as using tools, then observing and reasoning about the tool outputs."
+      }
+    },
+    {
+      "inputs": {
+        "question": "What are the types of biases that can arise with few-shot prompting?"
+      },
+      "outputs": {
+        "answer": "The biases that can arise with few-shot prompting include majority label bias, recency bias, and common token bias."
+      }
+    },
+    {
+      "inputs": {
+        "question": "What are five types of adversarial attacks?"
+      },
+      "outputs": {
+        "answer": "Five types of adversarial attacks include token manipulation, gradient-based attacks, jailbreak prompting, human red-teaming, and model red-teaming."
+      }
+    }
+  ]
+}
