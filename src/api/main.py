@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from src.api.routes import datasets, evaluation, health, rag, results
+from src.api.routes import datasets, documents, evaluation, health, rag, results
 from src.storage.paths import ensure_storage_dirs
 
 
@@ -14,6 +14,7 @@ def create_app() -> FastAPI:
     )
     application.include_router(health.router)
     application.include_router(datasets.router)
+    application.include_router(documents.router)
     application.include_router(evaluation.router)
     application.include_router(rag.router)
     application.include_router(results.router)

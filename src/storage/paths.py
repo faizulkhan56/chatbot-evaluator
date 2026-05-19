@@ -20,3 +20,8 @@ def datasets_dir() -> Path:
 def results_dir() -> Path:
     ensure_storage_dirs()
     return get_settings().results_dir
+
+
+def documents_dir() -> Path:
+    ensure_storage_dirs()
+    return get_settings().documents_dir

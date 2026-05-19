@@ -4,6 +4,9 @@ uvicorn
 pydantic
 pytest
 httpx
+python-multipart
+streamlit
+requests
 
 # Environment
 python-dotenv
@@ -31,6 +34,7 @@ typesense
 
 # Data / output
 pandas
+openpyxl
 beautifulsoup4
 
 # Optional OpenAI Agents SDK

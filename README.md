@@ -25,6 +25,7 @@ The core problem solved here is evaluating chatbot and RAG outputs locally witho
 - Multi-model comparison for chatbot and RAG flows
 - JSON and CSV result export
 - Result listing and retrieval API
+- Streamlit browser frontend
 - Swagger UI via FastAPI
 - Automated tests with pytest and FastAPI TestClient
 
@@ -155,6 +156,10 @@ chatbot-evaluator/
       paths.py
       result_store.py
   tests/
+  frontend/
+    api_client.py
+    components.py
+    streamlit_app.py
 ```
 
 ## Environment variables
@@ -234,6 +239,83 @@ Open:
 
 ```text
 http://127.0.0.1:8000/docs
+```
+
+## Running the Streamlit Frontend
+
+The Streamlit frontend is a separate browser UI that calls the FastAPI backend. It does not call OpenAI directly and does not duplicate backend business logic.
+
+Start the backend first:
+
+```bash
+uvicorn app:app --reload
+```
+
+FastAPI Swagger:
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+Then start the frontend:
+
+```bash
+streamlit run frontend/streamlit_app.py
+```
+
+Streamlit UI:
+
+```text
+http://localhost:8501
+```
+
+The frontend uses this backend URL by default:
+
+```text
+http://127.0.0.1:8000
+```
+
+Override it with:
+
+```bash
+FASTAPI_BASE_URL=http://127.0.0.1:8000 streamlit run frontend/streamlit_app.py
+```
+
+## Frontend Pages
+
+- Home
+- Chatbot Evaluation
+- RAG Documents
+- RAG Query
+- RAG Evaluation
+- Model Comparison
+- Results Browser
+
+## Full Demo Workflow
+
+1. Start FastAPI with `uvicorn app:app --reload`.
+2. Start Streamlit with `streamlit run frontend/streamlit_app.py`.
+3. Open `http://localhost:8501` and confirm the Home page shows backend health as OK.
+4. Use Chatbot Evaluation to create a dataset, run evaluation, and inspect JSON/CSV result paths.
+5. Use RAG Documents to upload documents and run ingestion.
+6. Use RAG Query to ask questions against the ingested documents.
+7. Use RAG Evaluation to add reference answers and score RAG responses.
+8. Use Model Comparison to compare chatbot or RAG models.
+9. Use Results Browser to inspect saved result files.
+
+RAG vector storage is currently in-memory. After restarting FastAPI, run RAG ingestion again before RAG Query, RAG Evaluation, or RAG model comparison.
+
+## FastAPI + Streamlit Architecture
+
+```mermaid
+flowchart LR
+    User[Browser user] --> Streamlit[Streamlit frontend]
+    Streamlit --> FastAPI[FastAPI backend]
+    FastAPI --> Datasets[(Local JSON datasets)]
+    FastAPI --> Documents[(Local uploaded documents)]
+    FastAPI --> Results[(JSON/CSV results)]
+    FastAPI --> RAG[In-memory RAG vector store]
+    FastAPI --> OpenAI[OpenAI models]
 ```
 
 ## Dataset format
@@ -526,6 +608,12 @@ Compile check:
 
 ```bash
 python -m compileall app.py src tests
+```
+
+With the frontend included:
+
+```bash
+python -m compileall app.py src tests frontend
 ```
 
 Latest validation:

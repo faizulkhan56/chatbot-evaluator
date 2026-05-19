@@ -22,6 +22,11 @@ data/results/*.json
 data/results/*.csv
 !data/results/.gitkeep
 
+# Uploaded/local RAG documents
+data/documents/*
+!data/documents/.gitkeep
+!data/documents/rag_sample.txt
+
 # Runtime/generated vector stores
 data/vectorstores/*
 !data/vectorstores/.gitkeep
@@ -43,3 +48,9 @@ Thumbs.db
 *.env
 .env.*
 !.env.example
+
+# Runtime-created datasets from UI
+data/datasets/*.json
+!data/datasets/chatbot_eval_sample.json
+!data/datasets/rag_eval_sample.json
+!data/datasets/.gitkeep
