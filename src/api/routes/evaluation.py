@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, status
 
-from src.llm.openai_client import LLMRequestError, MissingOpenAIAPIKeyError
-from src.rag.retriever import InvalidTopKError, VectorStoreNotInitializedError
+from src.llm.openai_client import LLMRequestError, MissingLLMAPIKeyError
+from src.llm.providers import UnsupportedProviderError
+from src.rag.retriever import InvalidTopKError, SourceFilterNoMatchError, VectorStoreNotInitializedError
 from src.schemas.evaluation import (
     ChatbotEvaluationRequest,
     ChatbotEvaluationResponse,
@@ -28,7 +29,9 @@ def evaluate_chatbot(request: ChatbotEvaluationRequest) -> ChatbotEvaluationResp
     try:
         result = evaluate_chatbot_dataset(
             dataset_name=request.dataset_name,
+            provider=request.provider,
             model_name=request.model_name,
+            evaluator_provider=request.evaluator_provider,
             evaluator_model=request.evaluator_model,
             instructions=request.instructions,
             concision_threshold=request.concision_threshold,
@@ -43,7 +46,9 @@ def evaluate_chatbot(request: ChatbotEvaluationRequest) -> ChatbotEvaluationResp
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     except InvalidEvaluationDatasetError as exc:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except MissingOpenAIAPIKeyError as exc:
+    except UnsupportedProviderError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except MissingLLMAPIKeyError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     except LLMRequestError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
@@ -56,11 +61,13 @@ def compare_evaluations(request: CompareEvaluationRequest) -> CompareEvaluationR
             mode=request.mode,
             dataset_name=request.dataset_name,
             models=request.models,
+            evaluator_provider=request.evaluator_provider,
             evaluator_model=request.evaluator_model,
             save_result=request.save_result,
             instructions=request.instructions,
             concision_threshold=request.concision_threshold,
             top_k=request.top_k,
+            source_filter=request.source_filter,
         )
         return CompareEvaluationResponse(**result)
     except CompareEvaluationError as exc:
@@ -77,7 +84,11 @@ def compare_evaluations(request: CompareEvaluationRequest) -> CompareEvaluationR
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     except VectorStoreNotInitializedError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except MissingOpenAIAPIKeyError as exc:
+    except SourceFilterNoMatchError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except UnsupportedProviderError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except MissingLLMAPIKeyError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     except LLMRequestError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
@@ -88,9 +99,12 @@ def evaluate_rag(request: RagEvaluationRequest) -> RagEvaluationResponse:
     try:
         result = evaluate_rag_dataset(
             dataset_name=request.dataset_name,
+            provider=request.provider,
             model_name=request.model_name,
+            evaluator_provider=request.evaluator_provider,
             evaluator_model=request.evaluator_model,
             top_k=request.top_k,
+            source_filter=request.source_filter,
             save_result=request.save_result,
         )
         return RagEvaluationResponse(**result)
@@ -106,7 +120,11 @@ def evaluate_rag(request: RagEvaluationRequest) -> RagEvaluationResponse:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     except VectorStoreNotInitializedError as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except MissingOpenAIAPIKeyError as exc:
+    except SourceFilterNoMatchError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except UnsupportedProviderError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except MissingLLMAPIKeyError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     except LLMRequestError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc

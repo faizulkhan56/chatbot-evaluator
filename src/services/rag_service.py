@@ -34,9 +34,13 @@ def query_rag(
     question: str,
     model_name: str,
     top_k: int,
+    provider: str = "openai",
+    source_filter: str | None = None,
 ) -> Dict[str, Any]:
     return rag_answer(
         question=question,
+        provider=provider,
         model_name=model_name,
         top_k=top_k,
+        source_filter=source_filter,
     )

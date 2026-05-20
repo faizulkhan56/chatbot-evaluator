@@ -176,16 +176,29 @@ Required:
 OPENAI_API_KEY=your_openai_api_key_here
 ```
 
+Optional Hugging Face target model support:
+
+```env
+HUGGINGFACE_API_KEY=your_huggingface_token_here
+```
+
 Optional defaults:
 
 ```env
+DEFAULT_PROVIDER=openai
 DEFAULT_MODEL=gpt-4o-mini
+
+DEFAULT_EVALUATOR_PROVIDER=openai
 DEFAULT_EVALUATOR_MODEL=gpt-4o-mini
+
+DEFAULT_HUGGINGFACE_MODEL=meta-llama/Llama-3.1-8B-Instruct
 DEFAULT_EMBEDDING_MODEL=text-embedding-3-small
 
 DEFAULT_CHUNK_SIZE=500
 DEFAULT_CHUNK_OVERLAP=50
 DEFAULT_TOP_K=6
+
+FASTAPI_BASE_URL=http://127.0.0.1:8000
 ```
 
 Tracing is disabled in the local-first version:
@@ -485,6 +498,73 @@ Saved result payloads include:
 }
 ```
 
+## Multi-provider model support
+
+OpenAI is the default provider and remains the recommended evaluator/judge provider for this version.
+
+Hugging Face can be used as an additional target model provider for chatbot responses, RAG answers, and model comparison. The backend uses the Hugging Face OpenAI-compatible chat completions route through the official `openai` client with this base URL:
+
+```text
+https://router.huggingface.co/v1
+```
+
+For this phase:
+
+- OpenAI target models are supported.
+- Hugging Face target models are supported.
+- OpenAI evaluator models are supported and recommended.
+- RAG embeddings still use OpenAI embeddings, `text-embedding-3-small`, by default.
+- Streamlit never calls OpenAI or Hugging Face directly; it calls FastAPI only.
+
+Hugging Face model availability depends on your token, provider routing, model access, and the selected model. Add `HUGGINGFACE_API_KEY` to `.env` to use Hugging Face target models.
+
+Backward-compatible OpenAI request:
+
+```json
+{
+  "dataset_name": "chatbot_eval_sample",
+  "model_name": "gpt-4o-mini",
+  "evaluator_model": "gpt-4o-mini"
+}
+```
+
+Hugging Face target model with OpenAI judge:
+
+```json
+{
+  "dataset_name": "chatbot_eval_sample",
+  "provider": "huggingface",
+  "model_name": "meta-llama/Llama-3.1-8B-Instruct",
+  "evaluator_provider": "openai",
+  "evaluator_model": "gpt-4o-mini"
+}
+```
+
+Model comparison supports old OpenAI shorthand:
+
+```json
+{
+  "models": ["gpt-4o-mini", "gpt-4.1-mini"]
+}
+```
+
+It also supports provider/model objects:
+
+```json
+{
+  "models": [
+    {
+      "provider": "openai",
+      "model": "gpt-4o-mini"
+    },
+    {
+      "provider": "huggingface",
+      "model": "meta-llama/Llama-3.1-8B-Instruct"
+    }
+  ]
+}
+```
+
 ## API endpoint reference
 
 | Method | Endpoint | Purpose |
@@ -530,6 +610,23 @@ curl -X POST "http://127.0.0.1:8000/evaluate/chatbot" \
   }'
 ```
 
+Chatbot evaluation with a Hugging Face target model and OpenAI judge:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/evaluate/chatbot" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "dataset_name": "chatbot_eval_sample",
+    "provider": "huggingface",
+    "model_name": "meta-llama/Llama-3.1-8B-Instruct",
+    "evaluator_provider": "openai",
+    "evaluator_model": "gpt-4o-mini",
+    "instructions": "Respond to the user question in a short, concise manner.",
+    "concision_threshold": 30,
+    "save_result": true
+  }'
+```
+
 RAG ingest:
 
 ```bash
@@ -551,6 +648,19 @@ curl -X POST "http://127.0.0.1:8000/rag/query" \
   -d '{
     "question": "How does the ReAct agent use self-reflection?",
     "model_name": "gpt-4o-mini",
+    "top_k": 6
+  }'
+```
+
+RAG query with a Hugging Face target model:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/rag/query" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "question": "How does the ReAct agent use self-reflection?",
+    "provider": "huggingface",
+    "model_name": "meta-llama/Llama-3.1-8B-Instruct",
     "top_k": 6
   }'
 ```
@@ -580,6 +690,32 @@ curl -X POST "http://127.0.0.1:8000/evaluate/compare" \
     "models": ["gpt-4o-mini", "gpt-4.1-mini"],
     "evaluator_model": "gpt-4o-mini",
     "top_k": 6,
+    "save_result": true
+  }'
+```
+
+Compare OpenAI and Hugging Face target models:
+
+```bash
+curl -X POST "http://127.0.0.1:8000/evaluate/compare" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "mode": "chatbot",
+    "dataset_name": "chatbot_eval_sample",
+    "models": [
+      {
+        "provider": "openai",
+        "model": "gpt-4o-mini"
+      },
+      {
+        "provider": "huggingface",
+        "model": "meta-llama/Llama-3.1-8B-Instruct"
+      }
+    ],
+    "evaluator_provider": "openai",
+    "evaluator_model": "gpt-4o-mini",
+    "instructions": "Respond to the user question in a short, concise manner.",
+    "concision_threshold": 30,
     "save_result": true
   }'
 ```

@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field
 
@@ -24,8 +24,10 @@ class RagIngestResponse(BaseModel):
 
 class RagQueryRequest(BaseModel):
     question: str = Field(..., min_length=1)
+    provider: Literal["openai", "huggingface"] = settings.default_provider
     model_name: str = settings.default_model
     top_k: int = Field(default=settings.default_top_k, gt=0)
+    source_filter: str | None = None
 
 
 class RetrievedDocument(BaseModel):
@@ -35,5 +37,6 @@ class RetrievedDocument(BaseModel):
 
 class RagQueryResponse(BaseModel):
     question: str
+    source_filter: str | None = None
     answer: str
     retrieved_documents: List[RetrievedDocument]

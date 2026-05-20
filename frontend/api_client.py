@@ -20,6 +20,10 @@ def list_datasets() -> Dict[str, Any]:
     return _get("/datasets")
 
 
+def get_dataset(name: str) -> Dict[str, Any]:
+    return _get(f"/datasets/{name}")
+
+
 def create_dataset(name: str, examples: List[Dict[str, Any]]) -> Dict[str, Any]:
     return _post(
         "/datasets",

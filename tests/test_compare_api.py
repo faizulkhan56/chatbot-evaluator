@@ -84,3 +84,57 @@ def test_compare_api_validation_errors(client):
 
     assert invalid_mode.status_code == 422
     assert empty_models.status_code == 422
+
+
+def test_compare_accepts_provider_model_objects(client, monkeypatch):
+    from src.api.routes import evaluation as evaluation_route
+
+    def fake_compare_models(**kwargs):
+        assert kwargs["models"][0].provider == "openai"
+        assert kwargs["models"][1].provider == "huggingface"
+        return {
+            "mode": "compare_chatbot",
+            "dataset_name": "chatbot_eval_sample",
+            "evaluator_provider": "openai",
+            "evaluator_model": "gpt-4o-mini",
+            "models": [
+                {"provider": "openai", "model": "gpt-4o-mini"},
+                {"provider": "huggingface", "model": "meta-llama/Llama-3.1-8B-Instruct"},
+            ],
+            "summary_by_model": [
+                {
+                    "provider": "openai",
+                    "model_name": "gpt-4o-mini",
+                    "total_examples": 1,
+                    "correctness_score": 1.0,
+                    "concision_score": 1.0,
+                }
+            ],
+            "results": [
+                {
+                    "provider": "openai",
+                    "model_name": "gpt-4o-mini",
+                    "results": [],
+                }
+            ],
+            "saved_result_path": None,
+            "saved_csv_path": None,
+        }
+
+    monkeypatch.setattr(evaluation_route, "compare_models", fake_compare_models)
+
+    response = client.post(
+        "/evaluate/compare",
+        json={
+            "mode": "chatbot",
+            "dataset_name": "chatbot_eval_sample",
+            "models": [
+                {"provider": "openai", "model": "gpt-4o-mini"},
+                {"provider": "huggingface", "model": "meta-llama/Llama-3.1-8B-Instruct"},
+            ],
+            "save_result": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["models"][1]["provider"] == "huggingface"

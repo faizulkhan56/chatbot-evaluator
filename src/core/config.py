@@ -25,8 +25,12 @@ def _path_from_env(name: str, default: Path) -> Path:
 @dataclass(frozen=True)
 class Settings:
     openai_api_key: Optional[str]
+    huggingface_api_key: Optional[str]
+    default_provider: str
     default_model: str
+    default_evaluator_provider: str
     default_evaluator_model: str
+    default_huggingface_model: str
     default_embedding_model: str
     default_chunk_size: int
     default_chunk_overlap: int
@@ -43,8 +47,12 @@ def get_settings() -> Settings:
     data_dir = _path_from_env("DATA_DIR", PROJECT_ROOT / "data")
     return Settings(
         openai_api_key=os.getenv("OPENAI_API_KEY"),
+        huggingface_api_key=os.getenv("HUGGINGFACE_API_KEY"),
+        default_provider=os.getenv("DEFAULT_PROVIDER", "openai"),
         default_model=os.getenv("DEFAULT_MODEL", "gpt-4o-mini"),
+        default_evaluator_provider=os.getenv("DEFAULT_EVALUATOR_PROVIDER", "openai"),
         default_evaluator_model=os.getenv("DEFAULT_EVALUATOR_MODEL", "gpt-4o-mini"),
+        default_huggingface_model=os.getenv("DEFAULT_HUGGINGFACE_MODEL", "meta-llama/Llama-3.1-8B-Instruct"),
         default_embedding_model=os.getenv("DEFAULT_EMBEDDING_MODEL", "text-embedding-3-small"),
         default_chunk_size=int(os.getenv("DEFAULT_CHUNK_SIZE", "500")),
         default_chunk_overlap=int(os.getenv("DEFAULT_CHUNK_OVERLAP", "50")),

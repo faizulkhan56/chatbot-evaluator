@@ -1,14 +1,22 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Union
 
 from pydantic import BaseModel, Field
 
 
 DEFAULT_INSTRUCTIONS = "Respond to the user's question in a short, concise manner."
+ProviderLiteral = Literal["openai", "huggingface"]
+
+
+class ModelSpec(BaseModel):
+    provider: ProviderLiteral = "openai"
+    model: str = Field(..., min_length=1)
 
 
 class ChatbotEvaluationRequest(BaseModel):
     dataset_name: str
+    provider: ProviderLiteral = "openai"
     model_name: str = "gpt-4o-mini"
+    evaluator_provider: Literal["openai"] = "openai"
     evaluator_model: str = "gpt-4o-mini"
     instructions: str = DEFAULT_INSTRUCTIONS
     concision_threshold: int = Field(default=30, ge=1)
@@ -31,7 +39,9 @@ class ChatbotEvaluationResultItem(BaseModel):
 class ChatbotEvaluationResponse(BaseModel):
     mode: str
     dataset_name: str
+    provider: Optional[str] = None
     model_name: str
+    evaluator_provider: Optional[str] = None
     evaluator_model: str
     created_at: Optional[str] = None
     total_examples: int
@@ -43,9 +53,12 @@ class ChatbotEvaluationResponse(BaseModel):
 
 class RagEvaluationRequest(BaseModel):
     dataset_name: str = "rag_eval_sample"
+    provider: ProviderLiteral = "openai"
     model_name: str = "gpt-4o-mini"
+    evaluator_provider: Literal["openai"] = "openai"
     evaluator_model: str = "gpt-4o-mini"
     top_k: int = Field(default=6, gt=0)
+    source_filter: Optional[str] = None
     save_result: bool = True
 
 
@@ -70,8 +83,11 @@ class RagEvaluationResultItem(BaseModel):
 class RagEvaluationResponse(BaseModel):
     mode: str
     dataset_name: str
+    provider: Optional[str] = None
     model_name: str
+    evaluator_provider: Optional[str] = None
     evaluator_model: str
+    source_filter: Optional[str] = None
     created_at: Optional[str] = None
     total_examples: int
     summary: RagEvaluationSummary
@@ -83,15 +99,18 @@ class RagEvaluationResponse(BaseModel):
 class CompareEvaluationRequest(BaseModel):
     mode: Literal["chatbot", "rag"]
     dataset_name: str = Field(..., min_length=1)
-    models: List[str] = Field(..., min_length=1)
+    models: List[Union[str, ModelSpec]] = Field(..., min_length=1)
+    evaluator_provider: Literal["openai"] = "openai"
     evaluator_model: str = "gpt-4o-mini"
     instructions: Optional[str] = DEFAULT_INSTRUCTIONS
     concision_threshold: int = Field(default=30, gt=0)
     top_k: int = Field(default=6, gt=0)
+    source_filter: Optional[str] = None
     save_result: bool = True
 
 
 class CompareModelSummary(BaseModel):
+    provider: Optional[str] = None
     model_name: str
     total_examples: int
     correctness_score: float
@@ -102,6 +121,7 @@ class CompareModelSummary(BaseModel):
 
 
 class CompareModelResult(BaseModel):
+    provider: Optional[str] = None
     model_name: str
     results: List[Dict[str, Any]]
 
@@ -109,8 +129,10 @@ class CompareModelResult(BaseModel):
 class CompareEvaluationResponse(BaseModel):
     mode: str
     dataset_name: str
+    evaluator_provider: Optional[str] = None
     evaluator_model: str
-    models: List[str]
+    models: List[Any]
+    source_filter: Optional[str] = None
     created_at: Optional[str] = None
     summary_by_model: List[CompareModelSummary]
     results: List[CompareModelResult]

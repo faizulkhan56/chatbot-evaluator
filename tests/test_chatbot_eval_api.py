@@ -52,3 +52,66 @@ def test_chatbot_evaluation_invalid_concision_threshold(client):
     )
 
     assert response.status_code == 422
+
+
+def test_chatbot_evaluation_accepts_huggingface_provider(client, monkeypatch):
+    from src.api.routes import evaluation as evaluation_route
+
+    def fake_evaluate_chatbot_dataset(**kwargs):
+        assert kwargs["provider"] == "huggingface"
+        assert kwargs["model_name"] == "meta-llama/Llama-3.1-8B-Instruct"
+        assert kwargs["evaluator_provider"] == "openai"
+        return {
+            "mode": "chatbot",
+            "dataset_name": "chatbot_eval_sample",
+            "provider": "huggingface",
+            "model_name": "meta-llama/Llama-3.1-8B-Instruct",
+            "evaluator_provider": "openai",
+            "evaluator_model": "gpt-4o-mini",
+            "total_examples": 1,
+            "summary": {
+                "correctness_score": 1.0,
+                "concision_score": 1.0,
+            },
+            "results": [
+                {
+                    "question": "What is LangChain?",
+                    "reference_answer": "A framework for building LLM applications",
+                    "model_response": "LangChain is a framework for LLM apps.",
+                    "correctness": True,
+                    "concision": True,
+                }
+            ],
+            "saved_result_path": None,
+            "saved_csv_path": None,
+        }
+
+    monkeypatch.setattr(evaluation_route, "evaluate_chatbot_dataset", fake_evaluate_chatbot_dataset)
+
+    response = client.post(
+        "/evaluate/chatbot",
+        json={
+            "dataset_name": "chatbot_eval_sample",
+            "provider": "huggingface",
+            "model_name": "meta-llama/Llama-3.1-8B-Instruct",
+            "evaluator_provider": "openai",
+            "evaluator_model": "gpt-4o-mini",
+            "save_result": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["provider"] == "huggingface"
+
+
+def test_chatbot_evaluation_rejects_unsupported_provider(client):
+    response = client.post(
+        "/evaluate/chatbot",
+        json={
+            "dataset_name": "chatbot_eval_sample",
+            "provider": "bad-provider",
+            "save_result": False,
+        },
+    )
+
+    assert response.status_code == 422

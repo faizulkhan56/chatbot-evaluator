@@ -9,6 +9,7 @@ from src.llm.evaluators import (
     evaluate_groundedness,
     evaluate_retrieval_relevance,
 )
+from src.llm.providers import normalize_provider
 from src.rag.retriever import InvalidTopKError, VectorStoreNotInitializedError
 from src.schemas.evaluation import RagEvaluationResponse
 from src.services.chatbot_eval_service import EmptyDatasetError, InvalidEvaluationDatasetError
@@ -23,9 +24,13 @@ def evaluate_rag_dataset(
     evaluator_model: str,
     top_k: int,
     save_result: bool,
+    provider: str = "openai",
+    evaluator_provider: str = "openai",
+    source_filter: str | None = None,
 ) -> Dict[str, Any]:
     if top_k <= 0:
         raise InvalidTopKError("top_k must be greater than 0.")
+    provider = normalize_provider(provider)
 
     try:
         dataset = LocalDatasetStore().get(dataset_name)
@@ -47,8 +52,10 @@ def evaluate_rag_dataset(
 
         rag_result = query_rag(
             question=question,
+            provider=provider,
             model_name=model_name,
             top_k=top_k,
+            source_filter=source_filter,
         )
         rag_answer = rag_result["answer"]
         retrieved_documents = rag_result["retrieved_documents"]
@@ -58,21 +65,25 @@ def evaluate_rag_dataset(
             reference_answer=reference_answer,
             model_response=rag_answer,
             evaluator_model=evaluator_model,
+            evaluator_provider=evaluator_provider,
         )
         groundedness = evaluate_groundedness(
             retrieved_documents=retrieved_documents,
             model_answer=rag_answer,
             evaluator_model=evaluator_model,
+            evaluator_provider=evaluator_provider,
         )
         relevance = evaluate_answer_relevance(
             question=question,
             model_answer=rag_answer,
             evaluator_model=evaluator_model,
+            evaluator_provider=evaluator_provider,
         )
         retrieval_relevance = evaluate_retrieval_relevance(
             question=question,
             retrieved_documents=retrieved_documents,
             evaluator_model=evaluator_model,
+            evaluator_provider=evaluator_provider,
         )
 
         results.append(
@@ -91,8 +102,11 @@ def evaluate_rag_dataset(
     response = {
         "mode": "rag",
         "dataset_name": dataset_name,
+        "provider": provider,
         "model_name": model_name,
+        "evaluator_provider": evaluator_provider,
         "evaluator_model": evaluator_model,
+        "source_filter": source_filter,
         "created_at": _utc_now(),
         "total_examples": len(results),
         "summary": {
@@ -107,7 +121,7 @@ def evaluate_rag_dataset(
     }
 
     if save_result:
-        prefix = f"rag_evaluation_{dataset_name}_{model_name}"
+        prefix = f"rag_evaluation_{dataset_name}_{provider}_{model_name}"
         bundle = LocalResultStore().save_result_bundle(prefix, response)
         response["saved_result_path"] = bundle["json_path"]
         response["saved_csv_path"] = bundle["csv_path"]

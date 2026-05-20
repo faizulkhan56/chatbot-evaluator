@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 from pydantic import ValidationError
 
 from src.llm.evaluators import evaluate_concision, evaluate_correctness
-from src.llm.openai_client import generate_chat_response
+from src.llm.providers import generate_response, normalize_provider
 from src.schemas.evaluation import ChatbotEvaluationResponse
 from src.storage.dataset_store import DatasetNotFoundError, LocalDatasetStore
 from src.storage.result_store import LocalResultStore
@@ -29,7 +29,10 @@ def evaluate_chatbot_dataset(
     instructions: str,
     concision_threshold: int,
     save_result: bool,
+    provider: str = "openai",
+    evaluator_provider: str = "openai",
 ) -> Dict[str, Any]:
+    provider = normalize_provider(provider)
     try:
         dataset = LocalDatasetStore().get(dataset_name)
     except ValidationError as exc:
@@ -48,7 +51,8 @@ def evaluate_chatbot_dataset(
         if not isinstance(reference_answer, str) or not reference_answer.strip():
             raise InvalidEvaluationDatasetError(f"Example {index} is missing outputs.answer.")
 
-        model_response = generate_chat_response(
+        model_response = generate_response(
+            provider=provider,
             question=question,
             model_name=model_name,
             instructions=instructions,
@@ -59,6 +63,7 @@ def evaluate_chatbot_dataset(
             reference_answer=reference_answer,
             model_response=model_response,
             evaluator_model=evaluator_model,
+            evaluator_provider=evaluator_provider,
         )
         concision = evaluate_concision(
             model_response=model_response,
@@ -83,7 +88,9 @@ def evaluate_chatbot_dataset(
     response = {
         "mode": "chatbot",
         "dataset_name": dataset_name,
+        "provider": provider,
         "model_name": model_name,
+        "evaluator_provider": evaluator_provider,
         "evaluator_model": evaluator_model,
         "created_at": _utc_now(),
         "total_examples": total_examples,
@@ -94,7 +101,7 @@ def evaluate_chatbot_dataset(
     }
 
     if save_result:
-        prefix = f"chatbot_evaluation_{dataset_name}_{model_name}"
+        prefix = f"chatbot_evaluation_{dataset_name}_{provider}_{model_name}"
         bundle = LocalResultStore().save_result_bundle(prefix, response)
         response["saved_result_path"] = bundle["json_path"]
         response["saved_csv_path"] = bundle["csv_path"]

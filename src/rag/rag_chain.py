@@ -1,26 +1,25 @@
 from typing import Any, Dict, List
 
-from langchain_openai import ChatOpenAI
-
-from src.core.config import get_settings
-from src.llm.openai_client import LLMRequestError, MissingOpenAIAPIKeyError
-from src.rag.retriever import get_retriever
+from src.llm.openai_client import LLMRequestError
+from src.llm.providers import generate_response, normalize_provider
+from src.rag.retriever import SourceFilterNoMatchError, get_retriever
 
 
 def rag_answer(
     question: str,
     model_name: str = "gpt-4o-mini",
     top_k: int = 6,
+    provider: str = "openai",
+    source_filter: str | None = None,
 ) -> Dict[str, Any]:
-    settings = get_settings()
-    if not settings.openai_api_key:
-        raise MissingOpenAIAPIKeyError("OPENAI_API_KEY is missing. Add it to .env before querying RAG.")
-
-    retriever = get_retriever(top_k=top_k)
-    retrieved_docs = retriever.invoke(question)
+    provider = normalize_provider(provider)
+    candidate_k = top_k * 5 if source_filter else top_k
+    retriever = get_retriever(top_k=candidate_k)
+    candidate_docs = retriever.invoke(question)
+    retrieved_docs = _filter_documents(candidate_docs, source_filter, top_k)
     docs_string = _format_documents(retrieved_docs)
 
-    prompt = f"""
+    instructions = f"""
 You are a helpful assistant who is good at analyzing source information and answering questions.
 
 Use the following source documents to answer the user's question.
@@ -29,24 +28,23 @@ Use three sentences maximum and keep the answer concise.
 
 Documents:
 {docs_string}
-
-Question:
-{question}
 """
 
     try:
-        llm = ChatOpenAI(
-            model=model_name,
-            api_key=settings.openai_api_key,
+        answer = generate_response(
+            provider=provider,
+            model_name=model_name,
+            question=question,
+            instructions=instructions,
             temperature=0,
         )
-        response = llm.invoke(prompt)
     except Exception as exc:
         raise LLMRequestError(f"RAG generation failed: {exc}") from exc
 
     return {
         "question": question,
-        "answer": response.content,
+        "source_filter": source_filter,
+        "answer": answer,
         "retrieved_documents": [
             {
                 "content": doc.page_content,
@@ -55,6 +53,24 @@ Question:
             for doc in retrieved_docs
         ],
     }
+
+
+def _filter_documents(documents: List[Any], source_filter: str | None, top_k: int) -> List[Any]:
+    if not source_filter:
+        return documents[:top_k]
+
+    normalized_filter = source_filter.lower()
+    filtered = [
+        doc
+        for doc in documents
+        if normalized_filter in str(doc.metadata.get("source", "")).lower()
+    ]
+    if not filtered:
+        raise SourceFilterNoMatchError(
+            f"No retrieved chunks matched source_filter='{source_filter}'. "
+            "Please confirm the document was uploaded and ingested."
+        )
+    return filtered[:top_k]
 
 
 def _format_documents(documents: List[Any]) -> str:

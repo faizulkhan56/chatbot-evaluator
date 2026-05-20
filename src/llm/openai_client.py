@@ -3,7 +3,11 @@ from openai import OpenAI, OpenAIError
 from src.core.config import get_settings
 
 
-class MissingOpenAIAPIKeyError(ValueError):
+class MissingLLMAPIKeyError(ValueError):
+    """Raised when a provider API key is not configured."""
+
+
+class MissingOpenAIAPIKeyError(MissingLLMAPIKeyError):
     """Raised when OPENAI_API_KEY is not configured."""
 
 

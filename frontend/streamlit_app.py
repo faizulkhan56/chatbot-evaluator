@@ -10,12 +10,20 @@ st.set_page_config(page_title="Chatbot & RAG Evaluator", layout="wide")
 
 PAGES = [
     "Home",
+    "Dataset Manager",
     "Chatbot Evaluation",
     "RAG Documents",
     "RAG Query",
     "RAG Evaluation",
     "Model Comparison",
     "Results Browser",
+]
+
+OPENAI_MODEL_PRESETS = ["gpt-4o-mini", "gpt-4.1-mini"]
+HUGGINGFACE_MODEL_PRESETS = [
+    "meta-llama/Llama-3.1-8B-Instruct",
+    "mistralai/Mistral-7B-Instruct-v0.3",
+    "Qwen/Qwen2.5-7B-Instruct",
 ]
 
 
@@ -27,6 +35,8 @@ def main() -> None:
 
     if page == "Home":
         render_home()
+    elif page == "Dataset Manager":
+        render_dataset_manager()
     elif page == "Chatbot Evaluation":
         render_chatbot_evaluation()
     elif page == "RAG Documents":
@@ -74,12 +84,196 @@ def render_home() -> None:
     st.markdown(
         """
         1. Start the FastAPI backend.
-        2. Upload or use documents under RAG Documents.
-        3. Run RAG ingestion before RAG query or RAG evaluation.
-        4. Run chatbot/RAG evaluations or model comparison.
-        5. Browse saved JSON/CSV results.
+        2. Use Dataset Manager to view or create evaluation datasets.
+        3. Upload or use documents under RAG Documents.
+        4. Run RAG ingestion before RAG query or RAG evaluation.
+        5. Run chatbot/RAG evaluations or model comparison.
+        6. Browse saved JSON/CSV results.
         """
     )
+
+
+def _provider_model_selector(key_prefix: str, label: str) -> tuple[str, str]:
+    provider = st.selectbox(label, ["openai", "huggingface"], index=0, key=f"{key_prefix}_provider")
+    presets = OPENAI_MODEL_PRESETS if provider == "openai" else HUGGINGFACE_MODEL_PRESETS
+    model_choice = st.selectbox("Model preset", [*presets, "Custom"], index=0, key=f"{key_prefix}_model_choice")
+    if model_choice == "Custom":
+        default_model = presets[0]
+        model_name = st.text_input("Custom model name", value=default_model, key=f"{key_prefix}_custom_model")
+    else:
+        model_name = model_choice
+    return provider, model_name
+
+
+def _parse_compare_models(models_text: str) -> list:
+    models = []
+    for raw_item in models_text.split(","):
+        item = raw_item.strip()
+        if not item:
+            continue
+        if ":" not in item:
+            models.append(item)
+            continue
+
+        provider, model_name = item.split(":", 1)
+        provider = provider.strip().lower()
+        model_name = model_name.strip()
+        if provider in {"openai", "huggingface"} and model_name:
+            models.append({"provider": provider, "model": model_name})
+        else:
+            models.append(item)
+    return models
+
+
+def _dataset_names() -> list[str]:
+    try:
+        response = api_client.list_datasets()
+    except Exception as exc:
+        render_error(exc)
+        return []
+    return [dataset.get("name") for dataset in response.get("datasets", []) if dataset.get("name")]
+
+
+def _dataset_selectbox(label: str, key: str, preferred: str = "") -> str:
+    names = _dataset_names()
+    if not names:
+        st.info("No datasets found. Create one in Dataset Manager or enter a name manually.")
+        return ""
+
+    index = names.index(preferred) if preferred in names else 0
+    return st.selectbox(label, names, index=index, key=key)
+
+
+def _source_filter_selectbox(key: str) -> str | None:
+    try:
+        response = api_client.list_documents()
+    except Exception as exc:
+        render_error(exc)
+        return None
+
+    documents = response.get("documents", [])
+    file_names = [document.get("file_name") for document in documents if document.get("file_name")]
+    options = ["All documents", *file_names]
+    selected = st.selectbox("Target document", options, key=key)
+    st.caption("Choose a document to restrict retrieval to one source, or use all ingested documents.")
+    return None if selected == "All documents" else selected
+
+
+def render_dataset_manager() -> None:
+    st.title("Dataset Manager")
+    st.caption("List, inspect, and create local evaluation datasets through the FastAPI backend.")
+
+    if "dataset_manager_list_response" not in st.session_state:
+        st.session_state.dataset_manager_list_response = None
+    if "dataset_manager_selected_response" not in st.session_state:
+        st.session_state.dataset_manager_selected_response = None
+    if "dataset_manager_examples" not in st.session_state:
+        st.session_state.dataset_manager_examples = []
+
+    st.subheader("Available Datasets")
+    if st.button("Refresh datasets"):
+        try:
+            st.session_state.dataset_manager_list_response = api_client.list_datasets()
+            st.session_state.dataset_manager_selected_response = None
+        except Exception as exc:
+            render_error(exc)
+
+    if st.session_state.dataset_manager_list_response is None:
+        try:
+            st.session_state.dataset_manager_list_response = api_client.list_datasets()
+        except Exception as exc:
+            render_error(exc)
+
+    datasets = (st.session_state.dataset_manager_list_response or {}).get("datasets", [])
+    if datasets:
+        st.dataframe(
+            [
+                {
+                    "name": dataset.get("name"),
+                    "example_count": dataset.get("example_count", 0),
+                    "path": dataset.get("path"),
+                }
+                for dataset in datasets
+            ],
+            use_container_width=True,
+        )
+
+        dataset_names = [dataset["name"] for dataset in datasets if dataset.get("name")]
+        selected_dataset = st.selectbox("Select dataset", dataset_names)
+        if st.button("Load selected dataset", type="primary"):
+            try:
+                st.session_state.dataset_manager_selected_response = api_client.get_dataset(selected_dataset)
+                st.success(f"Loaded dataset: {selected_dataset}")
+            except Exception as exc:
+                render_error(exc)
+
+        if st.session_state.dataset_manager_selected_response:
+            dataset = st.session_state.dataset_manager_selected_response
+            st.markdown(f"**Dataset:** `{dataset.get('name')}`")
+            st.metric("Total examples", dataset.get("example_count", len(dataset.get("examples", []))))
+            rows = _examples_to_rows(dataset.get("examples", []))
+            if rows:
+                st.dataframe(rows, use_container_width=True)
+            else:
+                st.info("Selected dataset has no examples.")
+            with st.expander("Raw dataset JSON"):
+                render_json(dataset)
+    else:
+        st.info("No datasets found.")
+
+    st.divider()
+    st.subheader("Create New Dataset")
+    dataset_type = st.selectbox("Dataset type", ["chatbot", "rag", "general"])
+    default_name = "ui_rag_eval" if dataset_type == "rag" else "ui_chatbot_eval"
+    new_dataset_name = st.text_input("Dataset name", value=default_name, key="dataset_manager_new_name")
+    question = st.text_area("Question", value="", key="dataset_manager_question")
+    reference_answer = st.text_area("Reference answer", value="", key="dataset_manager_reference")
+
+    col_add, col_clear, col_save = st.columns(3)
+    with col_add:
+        if st.button("Add example", key="dataset_manager_add", use_container_width=True):
+            if not question.strip():
+                st.warning("Question is required.")
+            elif not reference_answer.strip():
+                st.warning("Reference answer is required.")
+            else:
+                st.session_state.dataset_manager_examples.append(
+                    {
+                        "inputs": {"question": question.strip()},
+                        "outputs": {"answer": reference_answer.strip()},
+                    }
+                )
+                st.success("Example added.")
+
+    with col_clear:
+        if st.button("Clear examples", key="dataset_manager_clear", use_container_width=True):
+            st.session_state.dataset_manager_examples = []
+            st.info("Pending examples cleared. Backend datasets were not changed.")
+
+    with col_save:
+        if st.button("Save dataset", key="dataset_manager_save", use_container_width=True):
+            if not new_dataset_name.strip():
+                st.warning("Dataset name is required.")
+            elif not st.session_state.dataset_manager_examples:
+                st.warning("Add at least one example before saving.")
+            else:
+                try:
+                    response = api_client.create_dataset(
+                        new_dataset_name.strip(),
+                        st.session_state.dataset_manager_examples,
+                    )
+                    st.success(f"Dataset saved: {response.get('name', new_dataset_name)}")
+                    st.session_state.dataset_manager_list_response = api_client.list_datasets()
+                    st.session_state.dataset_manager_selected_response = response
+                    render_json(response)
+                except Exception as exc:
+                    render_error(exc)
+
+    if st.session_state.dataset_manager_examples:
+        st.caption(f"Pending examples: {len(st.session_state.dataset_manager_examples)}")
+        st.dataframe(_examples_to_rows(st.session_state.dataset_manager_examples), use_container_width=True)
+    else:
+        st.info("No pending examples added yet.")
 
 
 def render_chatbot_evaluation() -> None:
@@ -141,19 +335,23 @@ def render_chatbot_evaluation() -> None:
 
     st.divider()
     st.subheader("Evaluation Settings")
-    eval_dataset_name = st.text_input("Evaluation dataset name", value=dataset_name or "ui_chatbot_eval")
-    model_choice = st.selectbox("Model preset", ["gpt-4o-mini", "gpt-4.1-mini", "Custom"], index=0)
-    model_name = (
-        st.text_input("Custom model name", value="gpt-4o-mini")
-        if model_choice == "Custom"
-        else model_choice
+    selected_eval_dataset = _dataset_selectbox(
+        "Choose existing dataset",
+        key="chatbot_eval_dataset_select",
+        preferred=dataset_name or "ui_chatbot_eval",
     )
+    manual_eval_dataset_name = st.text_input("Manual dataset name override", value="")
+    eval_dataset_name = manual_eval_dataset_name.strip() or selected_eval_dataset or dataset_name or "ui_chatbot_eval"
+    provider, model_name = _provider_model_selector("chatbot_target", "Target provider")
+    st.caption("Hugging Face model availability depends on your token, inference provider, and model access.")
     evaluator_choice = st.selectbox("Evaluator model preset", ["gpt-4o-mini", "gpt-4.1-mini", "Custom"], index=0)
     evaluator_model = (
         st.text_input("Custom evaluator model name", value="gpt-4o-mini")
         if evaluator_choice == "Custom"
         else evaluator_choice
     )
+    evaluator_provider = "openai"
+    st.caption("Evaluator provider is OpenAI in this phase for more stable judging.")
     instructions = st.text_area(
         "Instructions",
         value="Respond to the user's question in a short, concise manner.",
@@ -168,7 +366,9 @@ def render_chatbot_evaluation() -> None:
             return
         payload = {
             "dataset_name": eval_dataset_name.strip(),
+            "provider": provider,
             "model_name": model_name,
+            "evaluator_provider": evaluator_provider,
             "evaluator_model": evaluator_model,
             "instructions": instructions,
             "concision_threshold": int(concision_threshold),
@@ -307,19 +507,22 @@ def render_rag_query() -> None:
     )
 
     question = st.text_area("Question", value="What is the main topic of the uploaded document?")
-    model_choice = st.selectbox("Model preset", ["gpt-4o-mini", "gpt-4.1-mini", "Custom"], index=0, key="rag_query_model_choice")
-    model_name = (
-        st.text_input("Custom model name", value="gpt-4o-mini", key="rag_query_custom_model")
-        if model_choice == "Custom"
-        else model_choice
-    )
+    provider, model_name = _provider_model_selector("rag_query_target", "Target provider")
+    st.caption("Hugging Face model availability depends on your token, inference provider, and model access.")
     top_k = st.number_input("Top K", min_value=1, value=6)
+    source_filter = _source_filter_selectbox("rag_query_source_filter")
 
     if st.button("Ask RAG", type="primary"):
         if not question.strip():
             st.warning("Question is required.")
             return
-        payload = {"question": question, "model_name": model_name, "top_k": int(top_k)}
+        payload = {
+            "question": question,
+            "provider": provider,
+            "model_name": model_name,
+            "top_k": int(top_k),
+            "source_filter": source_filter,
+        }
         try:
             result = api_client.query_rag(payload)
             st.session_state.rag_query_response = result
@@ -404,20 +607,25 @@ def render_rag_evaluation() -> None:
 
     st.divider()
     st.subheader("RAG Evaluation Settings")
-    eval_dataset_name = st.text_input("Evaluation dataset name", value=dataset_name or "ui_rag_eval")
-    model_choice = st.selectbox("Model preset", ["gpt-4o-mini", "gpt-4.1-mini", "Custom"], index=0, key="rag_eval_model_choice")
-    model_name = (
-        st.text_input("Custom model name", value="gpt-4o-mini", key="rag_eval_custom_model")
-        if model_choice == "Custom"
-        else model_choice
+    selected_eval_dataset = _dataset_selectbox(
+        "Choose existing dataset",
+        key="rag_eval_dataset_select",
+        preferred=dataset_name or "ui_rag_eval",
     )
+    manual_eval_dataset_name = st.text_input("Manual dataset name override", value="")
+    eval_dataset_name = manual_eval_dataset_name.strip() or selected_eval_dataset or dataset_name or "ui_rag_eval"
+    provider, model_name = _provider_model_selector("rag_eval_target", "Target provider")
+    st.caption("Hugging Face model availability depends on your token, inference provider, and model access.")
     evaluator_choice = st.selectbox("Evaluator model preset", ["gpt-4o-mini", "gpt-4.1-mini", "Custom"], index=0, key="rag_eval_evaluator_choice")
     evaluator_model = (
         st.text_input("Custom evaluator model name", value="gpt-4o-mini", key="rag_eval_custom_evaluator")
         if evaluator_choice == "Custom"
         else evaluator_choice
     )
+    evaluator_provider = "openai"
+    st.caption("Evaluator provider is OpenAI in this phase for more stable judging.")
     top_k = st.number_input("Top K", min_value=1, value=6)
+    source_filter = _source_filter_selectbox("rag_eval_source_filter")
     save_result = st.checkbox("Save result", value=True)
 
     st.subheader("Run Evaluation")
@@ -427,9 +635,12 @@ def render_rag_evaluation() -> None:
             return
         payload = {
             "dataset_name": eval_dataset_name.strip(),
+            "provider": provider,
             "model_name": model_name,
+            "evaluator_provider": evaluator_provider,
             "evaluator_model": evaluator_model,
             "top_k": int(top_k),
+            "source_filter": source_filter,
             "save_result": save_result,
         }
         try:
@@ -454,9 +665,21 @@ def render_model_comparison() -> None:
 
     mode = st.selectbox("Mode", ["chatbot", "rag"])
     dataset_default = "chatbot_eval_sample" if mode == "chatbot" else "rag_eval_sample"
-    dataset_name = st.text_input("Dataset name", value=dataset_default)
-    models_text = st.text_input("Models, comma-separated", value="gpt-4o-mini,gpt-4.1-mini")
+    selected_dataset = _dataset_selectbox(
+        "Choose existing dataset",
+        key=f"compare_dataset_select_{mode}",
+        preferred=dataset_default,
+    )
+    manual_dataset_name = st.text_input("Manual dataset name override", value="")
+    dataset_name = manual_dataset_name.strip() or selected_dataset or dataset_default
+    models_text = st.text_input(
+        "Models, comma-separated",
+        value="openai:gpt-4o-mini,huggingface:meta-llama/Llama-3.1-8B-Instruct",
+        help="Use bare model names for OpenAI shorthand, or provider:model for OpenAI/Hugging Face.",
+    )
     evaluator_model = st.text_input("Evaluator model", value="gpt-4o-mini")
+    evaluator_provider = "openai"
+    st.caption("Evaluator provider is OpenAI in this phase. Hugging Face can be compared as a target model.")
     instructions = None
     concision_threshold = 30
     top_k = 6
@@ -470,11 +693,14 @@ def render_model_comparison() -> None:
     else:
         st.warning("For RAG comparison, upload and ingest documents first from the RAG Documents page.")
         top_k = st.number_input("Top K", min_value=1, value=6)
+        source_filter = _source_filter_selectbox("compare_source_filter")
+    if mode == "chatbot":
+        source_filter = None
 
     save_result = st.checkbox("Save result", value=True)
 
     if st.button("Compare models", type="primary"):
-        models = [model.strip() for model in models_text.split(",") if model.strip()]
+        models = _parse_compare_models(models_text)
         if not dataset_name.strip():
             st.warning("Dataset name is required.")
             return
@@ -486,6 +712,7 @@ def render_model_comparison() -> None:
             "mode": mode,
             "dataset_name": dataset_name.strip(),
             "models": models,
+            "evaluator_provider": evaluator_provider,
             "evaluator_model": evaluator_model,
             "save_result": save_result,
         }
@@ -494,6 +721,7 @@ def render_model_comparison() -> None:
             payload["concision_threshold"] = int(concision_threshold)
         else:
             payload["top_k"] = int(top_k)
+            payload["source_filter"] = source_filter
 
         try:
             result = api_client.compare_models(payload)
@@ -617,6 +845,8 @@ def _render_chatbot_evaluation_result(result: Dict[str, Any]) -> None:
 
 def _render_rag_query_result(result: Dict[str, Any]) -> None:
     st.subheader("Answer")
+    if result.get("source_filter"):
+        st.caption(f"Source filter: {result['source_filter']}")
     answer = result.get("answer", "")
     if answer:
         st.success("RAG answer")
@@ -652,6 +882,8 @@ def _render_rag_query_result(result: Dict[str, Any]) -> None:
 
 def _render_rag_evaluation_result(result: Dict[str, Any]) -> None:
     st.subheader("Metrics")
+    if result.get("source_filter"):
+        st.caption(f"Source filter: {result['source_filter']}")
     summary = result.get("summary", {})
     render_metric_row(
         {
@@ -691,6 +923,8 @@ def _render_rag_evaluation_result(result: Dict[str, Any]) -> None:
 
 def _render_compare_result(result: Dict[str, Any]) -> None:
     st.subheader("Summary by model")
+    if result.get("source_filter"):
+        st.caption(f"Source filter: {result['source_filter']}")
     summary_by_model = result.get("summary_by_model", [])
     if summary_by_model:
         st.dataframe(summary_by_model, use_container_width=True)

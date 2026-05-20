@@ -12,6 +12,10 @@ class InvalidTopKError(ValueError):
     """Raised when top_k is invalid."""
 
 
+class SourceFilterNoMatchError(LookupError):
+    """Raised when retrieved chunks do not match the requested source filter."""
+
+
 def set_active_vectorstore(vectorstore: Any) -> None:
     global _active_vectorstore
     _active_vectorstore = vectorstore
